@@ -11,8 +11,32 @@ import math
 from datetime import datetime
 from typing import Dict, List, Optional
 
-# Swiss Ephemeris (sidereal calculations)
-import swe
+# Swiss Ephemeris mock — no C-library dependency required
+from mock_swe import (  # noqa: F401
+    SUN, MOON, MERCU, VENUS, MARS, JUPITER, SATURN,
+    calc_ut,
+    ayanamsa_ut,
+    houses_ut,
+)
+
+# Thin wrapper so existing code path (`swe.X`) keeps working
+import types
+
+swe = types.ModuleType("swe")
+swe.SUN = SUN
+swe.MOON = MOON
+swe.MERCURY = MERCU
+swe.VENUS = VENUS
+swe.MARS = MARS
+swe.JUPITER = JUPITER
+swe.SATURN = SATURN
+swe.calc_ut = calc_ut
+swe.ayanamsa_ut = ayanamsa_ut
+swe.houses_ut = houses_ut
+swe.FLAH_IRA = 1
+swe.FLG_SWIEPH = 1
+swe.FLG_SPEED = 2
+swe.FLG_SIDEREAL = 0x40
 
 
 # ── Helpers ────────────────────────────────────────────────────────────
@@ -24,7 +48,9 @@ def datetime_to_jd(dt: datetime) -> float:
     y = dt.year + 4800 - a
     m = dt.month + 12 * a - 3
     jd = dt.day + (153 * m + 2) // 5 + 365 * y + y // 4 - y // 100 + y // 400 - 32045
-    return jd
+    # Fractional day from time of day
+    frac = (dt.hour * 3600 + dt.minute * 60 + dt.second) / 86400
+    return float(jd) + frac
 
 
 def get_ayanamsa(jd: float) -> float:

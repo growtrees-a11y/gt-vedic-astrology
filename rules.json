@@ -1,0 +1,60 @@
+[
+  {
+    "name": "Sun in Aries in 1st House",
+    "description": "Self-assertive, pioneering personality",
+    "planet": "sun",
+    "sign": "Aries",
+    "house": 1,
+    "result": "Strong leadership, independence, and initiative"
+  },
+  {
+    "name": "Moon in Cancer",
+    "description": "Emotional security and nurturing nature",
+    "planet": "moon",
+    "sign": "Cancer",
+    "result": "Deep emotional sensitivity, family-oriented"
+  },
+  {
+    "name": "Jupiter in Own Sign — Sagittarius",
+    "description": "Expanded wisdom and philosophy",
+    "planet": "jupiter",
+    "sign": "Sagittarius",
+    "result": "Strong sense of dharma, love of learning and travel"
+  },
+  {
+    "name": "Saturn in 10th House",
+    "description": "Karmic career and discipline",
+    "planet": "saturn",
+    "house": 10,
+    "result": "Hard work brings success through persistence"
+  },
+  {
+    "name": "Mars in Scorpio",
+    "description": "Intense drive and transformation",
+    "planet": "mars",
+    "sign": "Scorpio",
+    "result": "Powerful willpower, investigative abilities"
+  },
+  {
+    "name": "Venus in Taurus in 2nd House",
+    "description": "Wealth and aesthetic appreciation",
+    "planet": "venus",
+    "sign": "Taurus",
+    "house": 2,
+    "result": "Material comfort through beauty and refinement"
+  },
+  {
+    "name": "Mercury in Gemini",
+    "description": "Quick mind and communication skills",
+    "planet": "mercury",
+    "sign": "Gemini",
+    "result": "Sharp intellect, excellent at networking"
+  },
+  {
+    "name": "Sun in 5th House",
+    "description": "Creativity and progeny",
+    "planet": "sun",
+    "house": 5,
+    "result": "Artistic talent, success through creative pursuits"
+  }
+]
