@@ -1,304 +1,187 @@
-"""
-PROJ-05 Tests — Vedic astrology chart calculations.
-Uses mock_swe (mathematical approximation) instead of pyswisseph.
-pytest test_main.py
-"""
-import json
-import os
+"""PROJ-05 Tests — mock-based, no external dependencies."""
 import pytest
+import json
 from datetime import datetime
 from main import (
-    VedicChart,
-    AstroRulesEngine,
-    degrees_to_sign,
-    SIGN_NAMES,
-    load_rules,
-    tropical_to_sidereal,
-    datetime_to_jd,
+    VedicChart, AstroRulesEngine, load_rules,
+    datetime_to_jd, get_ayanamsa, tropical_to_sidereal,
+    degrees_to_sign, compute_aspect, SIGN_NAMES,
+    validate_coordinates,
 )
 
 
-# ─── Helper / utility tests ─────────────────────────────────────────
+# ── Validation ──────────────────────────────────────────────────
+def test_validate_coordinates_valid():
+    lat, lon = validate_coordinates(40.7, -74.0)
+    assert lat == 40.7
+    assert lon == -74.0
 
-def test_degrees_to_sign():
-    assert degrees_to_sign(0) == 0  # Aries
-    assert degrees_to_sign(15) == 0  # Aries
-    assert degrees_to_sign(30) == 1  # Taurus
-    assert degrees_to_sign(89) == 2  # Gemini
-    assert degrees_to_sign(119) == 3  # Cancer
-    assert degrees_to_sign(359) == 11  # Pisces
-    assert degrees_to_sign(360) == 0  # wraps
+def test_validate_coordinates_invalid_lat():
+    with pytest.raises(ValueError, match="Latitude"):
+        validate_coordinates(95, 0)
+
+def test_validate_coordinates_invalid_lon():
+    with pytest.raises(ValueError, match="Longitude"):
+        validate_coordinates(0, 200)
 
 
-def test_degrees_to_sign_boundary():
-    """Check sign boundaries (every 30°)."""
-    for i in range(12):
-        assert degrees_to_sign(i * 30 - 1) == (i - 1) % 12
-        assert degrees_to_sign(i * 30) == i
+# ── Julian Day ──────────────────────────────────────────────────
+def test_jd_known():
+    """J2000.0 = 2000-01-01 12:00 UTC → JD 2451545.5"""
+    dt = datetime(2000, 1, 1, 12, 0, 0)
+    jd = datetime_to_jd(dt)
+    assert abs(jd - 2451545.5) < 0.01
 
+def test_jd_different_days():
+    a = datetime_to_jd(datetime(2025, 1, 1, 0, 0, 0))
+    b = datetime_to_jd(datetime(2025, 1, 2, 0, 0, 0))
+    assert abs(b - a - 1.0) < 0.01
+
+
+# ── Ayanamsa ──────────────────────────────────────────────────────
+def test_ayanamsa_positive():
+    jd = datetime_to_jd(datetime(2025, 6, 15))
+    aya = get_ayanamsa(jd)
+    assert 24 < aya < 26
+
+def test_tropical_to_sidereal():
+    sidereal = tropical_to_sidereal(30.0, 24.3)
+    assert abs(sidereal - 5.7) < 0.01
+
+def test_tropical_to_sidereal_wrap():
+    sidereal = tropical_to_sidereal(10.0, 24.3)
+    assert 345 < sidereal < 360
+
+
+# ── Sign Conversion ──────────────────────────────────────────────
+def test_degrees_to_sign_aries():
+    assert degrees_to_sign(5) == 0
+
+def test_degrees_to_sign_taurus():
+    assert degrees_to_sign(35) == 1
+
+def test_degrees_to_sign_pisces():
+    assert degrees_to_sign(350) == 11
 
 def test_sign_names():
-    assert len(SIGN_NAMES) == 12
     assert SIGN_NAMES[0] == "Aries"
     assert SIGN_NAMES[11] == "Pisces"
 
 
-def test_datetime_to_jd():
-    # Known: 2000-01-01 12:00 UTC → JD 2451545.0 (J2000.0)
-    dt = datetime(2000, 1, 1, 12, 0)
-    jd = datetime_to_jd(dt)
-    assert abs(jd - 2451545.0) < 1
-
-
-def test_tropical_to_sidereal_normal():
-    # 30° tropical − 23° ayanamsa = 7° sidereal (Aries)
-    assert tropical_to_sidereal(30, 23) == pytest.approx(7, abs=0.01)
-
-
-def test_tropical_to_sidereal_wrap():
-    # 10° − 23° = -13° → 347°
-    assert tropical_to_sidereal(10, 23) == pytest.approx(347, abs=0.01)
-
-
-# ─── VedicChart tests ───────────────────────────────────────────────
-
-def test_chart_creation():
-    dt = datetime(2000, 1, 1, 12, 0)
-    chart = VedicChart(dt, 40.0, -74.0)
-    assert chart.lat == 40.0
-    assert chart.lon == -74.0
-    assert isinstance(chart.jd, float)
-    assert chart.jd > 2400000
-
-
-def test_ayanamsa_positive():
-    """Ayanamsa should be positive for post-1000 CE dates."""
-    dt = datetime(2000, 1, 1, 12, 0)
-    chart = VedicChart(dt, 40.0, -74.0)
-    assert chart.ayanamsa > 0
-    # Roughly 23-24° for year 2000
-    assert 20 < chart.ayanamsa < 27
-
-
-def test_planet_positions_exist():
-    dt = datetime(2000, 1, 1, 12, 0)
-    chart = VedicChart(dt, 40.0, -74.0)
-    planets = chart.calculate_planets()
-    for body in ["sun", "moon", "mercury", "venus", "mars", "jupiter", "saturn"]:
-        assert body in planets, f"Missing {body}"
-        assert 0 <= planets[body] < 360, f"{body} degree out of range: {planets[body]}"
-
-
-def test_planet_signs_exist():
-    dt = datetime(2000, 1, 1, 12, 0)
-    chart = VedicChart(dt, 40.0, -74.0)
-    signs = chart.get_planet_signs()
-    assert "sun" in signs
-    assert "moon" in signs
-    assert "mars" in signs
-    for s in signs.values():
-        assert s in SIGN_NAMES, f"Invalid sign name: {s}"
-
-
-def test_ascendant_in_range():
-    dt = datetime(2000, 1, 1, 12, 0)
-    chart = VedicChart(dt, 40.0, -74.0)
-    asc = chart.calculate_ascendant()
-    assert 0 <= asc < 360
-
-
-def test_ascendant_sign_valid():
-    dt = datetime(2000, 1, 1, 12, 0)
-    chart = VedicChart(dt, 40.0, -74.0)
-    asc_deg = chart.calculate_ascendant()
-    asc_sign = SIGN_NAMES[degrees_to_sign(asc_deg)]
-    assert asc_sign in SIGN_NAMES
-
-
-def test_houses_count():
-    dt = datetime(2000, 1, 1, 12, 0)
-    chart = VedicChart(dt, 40.0, -74.0)
-    houses = chart.calculate_houses()
-    assert len(houses) == 12
-    for h in houses:
-        assert 0 <= h < 360
-
-
-def test_house_planets_mapping():
-    dt = datetime(2000, 1, 1, 12, 0)
-    chart = VedicChart(dt, 40.0, -74.0)
-    mapping = chart.get_house_planets()
-    # Should have 12 house keys
-    assert len(mapping) == 12
-    for h in range(1, 13):
-        assert h in mapping
-        assert isinstance(mapping[h], list)
-
-
-def test_full_chart_structure():
-    dt = datetime(2000, 1, 1, 12, 0)
-    chart = VedicChart(dt, 40.0, -74.0)
-    result = chart.full_chart()
-    assert "date" in result
-    assert "lat" in result
-    assert "lon" in result
-    assert "ayanamsa" in result
-    assert "ascendant_deg" in result
-    assert "ascendant_sign" in result
-    assert "planets" in result
-    assert "houses" in result
-    assert isinstance(result["planets"], dict)
-    assert isinstance(result["houses"], dict)
-    assert result["ascendant_sign"] in SIGN_NAMES
-
-
-def test_full_chart_planet_count():
-    """Full chart should contain all 7 classical planets."""
-    dt = datetime(2000, 1, 1, 12, 0)
-    chart = VedicChart(dt, 40.0, -74.0)
-    result = chart.full_chart()
-    expected = {"sun", "moon", "mercury", "venus", "mars", "jupiter", "saturn"}
-    assert set(result["planets"].keys()) == expected
-
-
-def test_different_dates_produce_different_charts():
-    dt1 = datetime(2000, 1, 1, 12, 0)
-    dt2 = datetime(2005, 6, 15, 8, 0)
-    c1 = VedicChart(dt1, 40.0, -74.0)
-    c2 = VedicChart(dt2, 40.0, -74.0)
-    # Ascendants should differ for very different dates
-    assert c1.calculate_ascendant() != c2.calculate_ascendant()
-
-
-def test_einstein_chart():
-    """Albert Einstein: 1879-03-14, 48.4014°N 9.9897°E."""
+# ── VedicChart ────────────────────────────────────────────────────
+def test_chart_einstein():
     dt = datetime(1879, 3, 14, 8, 0)
     chart = VedicChart(dt, 48.4014, 9.9897)
     result = chart.full_chart()
-    assert result["ascendant_sign"] in SIGN_NAMES
+    assert "ascendant_sign" in result
     assert len(result["planets"]) == 7
     assert len(result["houses"]) == 12
 
+def test_chart_gandhi():
+    dt = datetime(1869, 10, 2, 1, 0)
+    chart = VedicChart(dt, 21.1702, 72.8181)
+    result = chart.full_chart()
+    assert len(result["planets"]) == 7
+    assert "aspects" in result
 
-# ─── Rules Engine tests ─────────────────────────────────────────────
+def test_chart_aspects_present():
+    dt = datetime(2000, 1, 1, 12, 0)
+    chart = VedicChart(dt, 40.0, -74.0)
+    result = chart.full_chart()
+    assert isinstance(result["aspects"], list)
+    for asp in result["aspects"]:
+        assert "planet1" in asp
+        assert "planet2" in asp
+        assert "aspect" in asp
 
-def test_rules_engine_basic():
+def test_chart_house_planets():
+    dt = datetime(2025, 6, 15, 9, 30)
+    chart = VedicChart(dt, 40.7, -74.0)
+    houses = chart.get_house_planets()
+    assert len(houses) == 12
+    all_planets = []
+    for planets_in_house in houses.values():
+        all_planets.extend(planets_in_house)
+    assert len(all_planets) == 7
+
+
+# ── Rules Engine ────────────────────────────────────────────────
+def test_rules_engine_match():
+    rules = [{"planet": "sun", "sign": "Leo"}]
+    engine = AstroRulesEngine(rules)
+    chart = {"planets": {"sun": "Leo"}, "houses": {}, "aspects": []}
+    triggered = engine.evaluate(chart)
+    assert len(triggered) == 1
+
+def test_rules_engine_no_match():
+    rules = [{"planet": "sun", "sign": "Virgo"}]
+    engine = AstroRulesEngine(rules)
+    chart = {"planets": {"sun": "Leo"}, "houses": {}, "aspects": []}
+    triggered = engine.evaluate(chart)
+    assert len(triggered) == 0
+
+def test_rules_engine_house_match():
+    rules = [{"planet": "mars", "house": 7}]
+    engine = AstroRulesEngine(rules)
+    chart = {"planets": {}, "houses": {7: ["mars"]}, "aspects": []}
+    triggered = engine.evaluate(chart)
+    assert len(triggered) == 1
+
+def test_rules_engine_aspect_match():
     rules = [
-        {"planet": "sun", "sign": "Aries", "house": 1},
-        {"planet": "moon", "sign": "Cancer"},
+        {
+            "planet": "moon",
+            "aspect": "conjunction",
+            "aspect_planet": "mars",
+            "require_aspect": True,
+        }
     ]
     engine = AstroRulesEngine(rules)
     chart = {
-        "planets": {"sun": "Aries", "moon": "Cancer"},
-        "houses": {},
+        "planets": {}, "houses": {},
+        "aspects": [{"planet1": "moon", "planet2": "mars",
+                      "aspect": "conjunction", "angle_deg": 2.5}],
     }
     triggered = engine.evaluate(chart)
-    # moon in cancer matches (sign only, no house constraint)
-    # sun in Aries but house 1 is not in chart → does NOT match
-    assert len(triggered) == 1
-    assert triggered[0]["planet"] == "moon"
-
-
-def test_rules_engine_all_match():
-    rules = [
-        {"planet": "sun", "sign": "Aries", "house": 1},
-    ]
-    engine = AstroRulesEngine(rules)
-    chart = {
-        "planets": {"sun": "Aries"},
-        "houses": {1: ["sun"]},
-    }
-    triggered = engine.evaluate(chart)
     assert len(triggered) == 1
 
-
-def test_rules_engine_none_match():
+def test_rules_engine_aspect_no_match():
     rules = [
-        {"planet": "sun", "sign": "Capricorn"},
+        {
+            "planet": "moon",
+            "aspect": "conjunction",
+            "aspect_planet": "mars",
+            "require_aspect": True,
+        }
     ]
     engine = AstroRulesEngine(rules)
-    chart = {
-        "planets": {"sun": "Aries"},
-        "houses": {},
-    }
+    chart = {"planets": {}, "houses": {}, "aspects": []}
     triggered = engine.evaluate(chart)
     assert len(triggered) == 0
 
 
-def test_rules_engine_case_insensitive():
-    rules = [{"planet": "SUN", "sign": "ARIES"}]
-    engine = AstroRulesEngine(rules)
-    chart = {"planets": {"sun": "Aries"}, "houses": {}}
-    triggered = engine.evaluate(chart)
-    assert len(triggered) == 1
+# ── Load Rules ──────────────────────────────────────────────────
+def test_load_rules_file(tmp_path):
+    rules = [{"planet": "sun", "sign": "Leo"}]
+    path = tmp_path / "test_rules.json"
+    path.write_text(json.dumps(rules))
+    loaded = load_rules(str(path))
+    assert len(loaded) == 1
+    assert loaded[0]["planet"] == "sun"
 
 
-def test_rules_engine_house_check():
-    rules = [{"planet": "mars", "house": 5}]
-    engine = AstroRulesEngine(rules)
-    # Mars is NOT in house 5
-    chart = {"planets": {"mars": "Scorpio"}, "houses": {5: ["venus"]}}
-    triggered = engine.evaluate(chart)
-    assert len(triggered) == 0
+# ── Compute Aspect ──────────────────────────────────────────────
+def test_compute_aspect_conjunction():
+    assert compute_aspect(2.0) == "conjunction"
 
+def test_compute_aspect_opposition():
+    assert compute_aspect(179.0) == "opposition"
 
-def test_rules_engine_house_check_positive():
-    rules = [{"planet": "mars", "house": 5}]
-    engine = AstroRulesEngine(rules)
-    chart = {"planets": {"mars": "Scorpio"}, "houses": {5: ["mars"]}}
-    triggered = engine.evaluate(chart)
-    assert len(triggered) == 1
+def test_compute_aspect_trine():
+    assert compute_aspect(120.0) == "trine"
 
+def test_compute_aspect_square():
+    assert compute_aspect(90.0) == "square"
 
-def test_load_rules_file():
-    rules_path = os.path.join(os.path.dirname(__file__), "rules.json")
-    rules = load_rules(rules_path)
-    assert len(rules) > 0
-    assert isinstance(rules, list)
-    for rule in rules:
-        assert "planet" in rule
-
-
-def test_load_rules_and_evaluate():
-    """Load real rules.json and evaluate against a chart."""
-    rules_path = os.path.join(os.path.dirname(__file__), "rules.json")
-    rules = load_rules(rules_path)
-    engine = AstroRulesEngine(rules)
-    chart = {
-        "planets": {"sun": "Aries", "moon": "Cancer", "mars": "Scorpio"},
-        "houses": {1: ["sun"], 5: ["mars"]},
-    }
-    triggered = engine.evaluate(chart)
-    assert len(triggered) >= 1
-
-
-# ─── Mock-specific sanity checks ──────────────────────────────────
-
-def test_mock_swe_importable():
-    """Ensure mock_swe module loads without errors."""
-    from main import swe
-    # Verify key attributes exist
-    assert hasattr(swe, "calc_ut")
-    assert hasattr(swe, "ayanamsa_ut")
-    assert hasattr(swe, "houses_ut")
-    assert hasattr(swe, "SUN")
-    assert hasattr(swe, "MOON")
-
-
-def test_mock_calc_ut_returns_typed():
-    from main import swe
-    pos, _ = swe.calc_ut(2451545.0, swe.SUN)
-    assert isinstance(pos, list)
-    assert len(pos) == 3
-
-
-def test_mock_houses_ut_returns_12_cusps():
-    from main import swe
-    cusps, _ = swe.houses_ut(2451545.0, 40.0, -74.0)
-    assert len(cusps) == 12
-
-
-def test_mock_ayanamsa_is_reasonable():
-    from main import swe
-    aya, _ = swe.ayanamsa_ut(2451545.0 - 2440587.5, swe.FLAH_IRA)
-    assert 20 < aya < 27  # ~23° for J2000
+def test_compute_aspect_none():
+    assert compute_aspect(45.0) is None

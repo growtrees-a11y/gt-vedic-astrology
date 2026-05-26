@@ -1,0 +1,42 @@
+# ── Files / directories ──────────────────────────────────────────────
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+*.egg-info
+dist/
+build/
+.eggs/
+
+# ── Environments ───────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── IDE / editor ───────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ── OS / system ────────────────────────────────────────────────────
+Thumbs.db
+desktop.ini
+
+# ── Docker artefacts (already in image) ───────────────────────────
+docker-compose*.yml
+Dockerfile
+.dockerignore
+
+# ── Large / not-needed in image ────────────────────────────────────
+*.md
+LICENSE
+tests/
+.github/
+
+# ── Ephemeris data (baked into image at build time) ────────────────
+# If you mount a local ephe/ folder, exclude it from .dockerignore
+# by adding a negation: !ephe/

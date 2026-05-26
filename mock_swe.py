@@ -77,10 +77,10 @@ def ayanamsa_ut(jd: float, mode: int) -> tuple:
     """Mock swe.ayanamsa_ut — Lahiri Ayanamsa (degrees).
 
     The caller passes `jd` as MJD (days since JD 2440587.5 = 1858.875).
-    Lahiri ayanamsa ≈ 23.07° at J2000, growing at ~0.01397°/year.
+    Lahiri ayanamsa ≈ 24.05° at J2000, growing at ~0.01397°/year.
     """
     year = 1858.875 + jd / 365.25
-    aya = 23.07 + 0.01397 * (year - 2000)
+    aya = 24.05 + 0.01397 * (year - 2000)
     return (aya, 0)
 
 

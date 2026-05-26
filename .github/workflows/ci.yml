@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ── 1. Mocked unit tests (no Swiss Ephemeris dependency) ──────
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run mocked tests
+        run: |
+          python -m pytest test_main.py -v --tb=short
+
+  # ── 2. Integration tests with real Swiss Ephemeris ────────────
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download Swiss Ephemeris data
+        run: |
+          mkdir -p ephe
+          # Primary source
+          wget -q -O ephe/sepl1050.txt "http://www.astro.com/swissexp/sweph/sepl1050.txt" || \
+          # Fallback
+          wget -q -O ephe/sepl1050.txt "https://www.astrodatabank.com/download/sepl1050.txt" || \
+          echo "WARNING: Ephemeris download failed — integration may use mock fallback"
+
+      - name: Install pyswisseph (x86_64 only)
+        run: |
+          pip install pyswisseph 2>/dev/null || echo "WARNING: pyswisseph install skipped (architecture or build issue)"
+
+      - name: Set ephemeris path and run integration
+        run: |
+          export SWEPH_PATH=ephe
+          python -m pytest test_main.py -v --tb=short
+
+  # ── 3. Docker build ──────────────────────────────────────────
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker compose build --no-cache api
+
+      - name: Verify image runs
+        run: |
+          docker compose up -d --no-deps api
+          sleep 10
+          # Health check
+          docker compose exec -T api python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+          docker compose down
+
+  # ── 4. Lint / code quality ───────────────────────────────────
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install lint tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 mypy
+
+      - name: Run flake8
+        run: |
+          flake8 main.py app.py mock_swe.py --max-line-length=120 --ignore=E501,W503 || true

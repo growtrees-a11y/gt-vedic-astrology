@@ -2,3 +2,8 @@ __pycache__/
 *.pyc
 .env
 node_modules/
+.DS_Store
+.ephe
+ephe/sepl1050.txt
+*.tar.gz
+*.txt.bak

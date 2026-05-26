@@ -1,0 +1,53 @@
+version: "3.9"
+
+# Production override: harden Redis, mount ephe data as read-only volume,
+# add resource limits, and disable port exposure (reverse-proxy handles TLS).
+
+services:
+  api:
+    ports: []  # Expose via reverse proxy instead
+    volumes:
+      - type: bind
+        source: ./ephe
+        target: /usr/share/sweph/ephe
+        read_only: true
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - SWEPH_PATH=/usr/share/sweph/ephe
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    restart: always
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+
+  redis:
+    ports: []
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --appendonly yes
+    volumes:
+      - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 768M
+
+volumes:
+  redis_data:
+    driver: local
